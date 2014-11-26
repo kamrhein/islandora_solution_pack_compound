@@ -273,6 +273,7 @@ function islandora_compound_object_navigation_block() {
  * Implements hook_islandora_cmodel_islandora_view_object().
  */
 function islandora_compound_object_islandora_compoundCModel_islandora_view_object($object) {
+/**
   // Get view of first child.
   $children = islandora_compound_object_get_parts($object->id);
   if (!empty($children)) {
@@ -282,6 +283,7 @@ function islandora_compound_object_islandora_compoundCModel_islandora_view_objec
       return islandora_view_object($first_child);
     }
   }
+*/
 }
 
 /**
