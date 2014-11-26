@@ -13,6 +13,7 @@ function set_caption_timout() {
         function() {
           image_width = jQuery(this).find('img').outerWidth();
           jQuery(this).css('max-width', image_width);
+          jQuery(this).css('min-width', '100px');
         }
       );
     },
