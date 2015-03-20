@@ -620,14 +620,19 @@ function islandora_compound_object_menu_local_tasks_alter(&$data, $router_item, 
  *   -sequence: An integer that is the sequence number of the current object.
  */
 function islandora_compound_object_retrieve_compound_info(AbstractObject $object) {
+<<<<<<< HEAD
+  $rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
+  $part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $rels_predicate);
+=======
   global $user;
   $coll_predicate = variable_get('islandora_object_collection_relationship', 'isMemberOfCollection');
+>>>>>>> adapted block layout to coco and adco
   $info = array();
   $other_parent_object_pid = NULL;
 
   //get all parents
   $child_rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
-  $part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $child_rels_predicate);
+  $part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $child_rels_predicate);
 
   //get user role
   $isAdcoUser = in_array('adco', $user->roles);
@@ -636,7 +641,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
   $currentDispObjIsAdminCObject = FALSE;
   $currentDispObjIsContentCObject = FALSE;
   $currentDispObject = islandora_object_load(arg(2));
-  $currentDispObjCollections = $currentDispObject->relationships->get(FEDORA_RELS_EXT_URI, $coll_predicate);
+  $currentDispObjCollections = $currentDispObject->relationships->get('info:fedora/fedora-system:def/relations-external#', $coll_predicate);
   foreach ($currentDispObjCollections as $curDOcollpart) {
     if ('zib:adminCompoundObjects' == $curDOcollpart['object']['value'])  {
       $currentDispObjIsAdminCObject = TRUE;
@@ -654,6 +659,36 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
 
     // Go through all parents.
     foreach ($part_of as $part) {
+<<<<<<< HEAD
+      $parent_pid = $part['object']['value'];
+      $parent = islandora_object_load($parent_pid);
+      if ($parent) {
+        $siblings = islandora_compound_object_get_parts($parent_pid);
+        $current_key = array_search($object->id, $siblings);
+        $previous_pid = (isset($siblings[$current_key - 1])) ? $siblings[$current_key - 1] : '';
+        $next_pid = (isset($siblings[$current_key + 1])) ? $siblings[$current_key + 1] : '';
+
+        // Check if perms to show link for parent manage.
+        if (islandora_object_manage_access_callback(array(
+          ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
+          $parent_url = 'islandora/object/' . $parent_pid . '/manage';
+        }
+        else {
+          $parent_url = FALSE;
+        }
+        $info = array(
+          'parent_label' => $parent->label,
+          'parent_pid' => $parent_pid,
+          'parent_url' => $parent_url,
+          'previous_pid' => $previous_pid,
+          'next_pid' => $next_pid,
+          'child_count' => count($siblings),
+          'siblings' => $siblings,
+          'pid' => $object->id,
+          'label' => $object->label,
+          'sequence' => $current_key + 1,
+        );
+=======
       // reset values for each part
       $currentParentIsAdminCObject=FALSE;
       $currentParentIsContentCObject=FALSE;
@@ -664,7 +699,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
       
       if ($current_parent) { //can be None-Object, if no access rights to current_parent given
         //get object type of current parent
-        $part_of_collection = $current_parent->relationships->get(FEDORA_RELS_EXT_URI, $coll_predicate);
+        $part_of_collection = $current_parent->relationships->get('info:fedora/fedora-system:def/relations-external#', $coll_predicate);
         foreach ($part_of_collection as $collpart) {
           if ('zib:adminCompoundObjects' == $collpart['object']['value'])  {
             $currentParentIsAdminCObject = TRUE;
@@ -712,6 +747,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
         $adminCompoundObject_url = 'islandora/object/' . $adminCompoundObject;
       } else {
         $adminCompoundObject_url = FALSE;
+>>>>>>> adapted block layout to coco and adco
       }
     }
     else {
