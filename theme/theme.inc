@@ -16,13 +16,13 @@ function template_preprocess_islandora_compound_prev_next(array &$variables) {
   $themed_siblings = array();
   $image_path = drupal_get_path('module', 'islandora');
   $folder_image_path = "$image_path/images/folder.png";
-  if ($variables['child_count'] > 1) {
+  if ($variables['child_count'] > 0/*1*/) {
     for ($i = 0; $i < count($variables['siblings']); $i += 1) {
       $sibling = array();
       $sibling['pid'] = $variables['siblings'][$i];
       $sibling['class'] = array();
-      if ($sibling['pid'] === $variables['pid']) {
-        $sibling['class'][] = 'active';
+      if ($sibling['pid'] === arg(2)/*$variables['pid']*/) { //fixes: setting active, even though object is not displayed (variables[pid] points to a child)
+        $sibling['class'][] = 'active'; 
       }
       $sibling_object = islandora_object_load($sibling['pid']);
       if (isset($sibling_object['TN']) && islandora_datastream_access(ISLANDORA_VIEW_OBJECTS, $sibling_object['TN'])) {

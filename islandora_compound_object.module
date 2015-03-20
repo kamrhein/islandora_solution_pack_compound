@@ -101,6 +101,8 @@ function islandora_compound_object_theme($existing, $type, $theme, $path) {
         'child_count' => NULL,
         'siblings' => NULL,
         'pid' => NULL,
+        'admin_access_object' => NULL,
+        'content_access_object' => NULL,
       ),
     ),
     'islandora_compound_object_draggable_table' => array(
@@ -246,11 +248,14 @@ function islandora_compound_object_navigation_block() {
   module_load_include('inc', 'islandora', 'includes/utilities');
   drupal_add_css(drupal_get_path('module', 'islandora_compound_object') . '/css/islandora_compound_object.block.css');
   if (arg(1) == 'object' && islandora_is_valid_pid(arg(2))) {
-
-    // If only compound cmodel objects can be compound, this isn't necessary.
-    $children = islandora_compound_object_get_parts(arg(2));
-    $pid = (!empty($children)) ? $children[0] : arg(2);
-    $object = islandora_object_load($pid);
+      
+    $parent = islandora_object_load(arg(2));
+    if (islandora_datastream_access(ISLANDORA_VIEW_OBJECTS, $parent['RELS-EXT'])) {
+      // If only compound cmodel objects can be compound, this isn't necessary.
+      $children = islandora_compound_object_get_parts(arg(2));
+      $pid = (!empty($children)) ? $children[0] : arg(2);
+      $object = islandora_object_load($pid);
+    
 
     $output = '';
     if ($object) {
@@ -266,6 +271,7 @@ function islandora_compound_object_navigation_block() {
         return array('#markup' => $output);
       }
     }
+}
   }
 }
 
@@ -614,43 +620,127 @@ function islandora_compound_object_menu_local_tasks_alter(&$data, $router_item, 
  *   -sequence: An integer that is the sequence number of the current object.
  */
 function islandora_compound_object_retrieve_compound_info(AbstractObject $object) {
-  $rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
-  $part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
+  global $user;
+  $coll_predicate = variable_get('islandora_object_collection_relationship', 'isMemberOfCollection');
   $info = array();
-  // This object is part of a compound object.
-  if (!empty($part_of)) {
-    // Go through all parents.
-    foreach ($part_of as $part) {
-      $parent_pid = $part['object']['value'];
-      $parent = islandora_object_load($parent_pid);
+  $other_parent_object_pid = NULL;
 
-      $siblings = islandora_compound_object_get_parts($parent_pid);
-      $current_key = array_search($object->id, $siblings);
-      $previous_pid = (isset($siblings[$current_key - 1])) ? $siblings[$current_key - 1] : '';
-      $next_pid = (isset($siblings[$current_key + 1])) ? $siblings[$current_key + 1] : '';
+  //get all parents
+  $child_rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
+  $part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $child_rels_predicate);
 
-      // Check if perms to show link for parent manage.
-      if (islandora_object_manage_access_callback(array(
-        ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
-        $parent_url = 'islandora/object/' . $parent_pid . '/manage';
-      }
-      else {
-        $parent_url = FALSE;
-      }
-      $info = array(
-        'parent_label' => $parent->label,
-        'parent_pid' => $parent_pid,
-        'parent_url' => $parent_url,
-        'previous_pid' => $previous_pid,
-        'next_pid' => $next_pid,
-        'child_count' => count($siblings),
-        'siblings' => $siblings,
-        'pid' => $object->id,
-        'label' => $object->label,
-        'sequence' => $current_key + 1,
-      );
+  //get user role
+  $isAdcoUser = in_array('adco', $user->roles);
+
+  //load current displayed object and check type
+  $currentDispObjIsAdminCObject = FALSE;
+  $currentDispObjIsContentCObject = FALSE;
+  $currentDispObject = islandora_object_load(arg(2));
+  $currentDispObjCollections = $currentDispObject->relationships->get('info:fedora/fedora-system:def/relations-external#', $coll_predicate);
+  foreach ($currentDispObjCollections as $curDOcollpart) {
+    if ('zib:adminCompoundObjects' == $curDOcollpart['object']['value'])  {
+      $currentDispObjIsAdminCObject = TRUE;
+    }
+    if ('zib:contentCompoundObjects' == $curDOcollpart['object']['value'])  {
+      $currentDispObjIsContentCObject = TRUE;
     }
   }
+
+  // This object is part of a compound object.
+  if (!empty($part_of)) {
+    $main_parent=FALSE;
+    $adminCompoundObject=FALSE;
+    $contentCompoundObject=FALSE;
+
+    // Go through all parents.
+    foreach ($part_of as $part) {
+      // reset values for each part
+      $currentParentIsAdminCObject=FALSE;
+      $currentParentIsContentCObject=FALSE;
+      
+      //get part as current parent
+      $current_parent_pid = $part['object']['value']; 
+      $current_parent = islandora_object_load($current_parent_pid);
+      
+      if ($current_parent) { //can be None-Object, if no access rights to current_parent given
+        //get object type of current parent
+        $part_of_collection = $current_parent->relationships->get('info:fedora/fedora-system:def/relations-external#', $coll_predicate);
+        foreach ($part_of_collection as $collpart) {
+          if ('zib:adminCompoundObjects' == $collpart['object']['value'])  {
+            $currentParentIsAdminCObject = TRUE;
+          }
+          if ('zib:contentCompoundObjects' == $collpart['object']['value'])  {
+            $currentParentIsContentCObject = TRUE;
+          }
+        }
+
+        // set main_parent (for manage object link and label);  check for and eventually set links for admin/content c-objects  
+        if ($isAdcoUser) {
+          if ($currentParentIsAdminCObject) {
+            $main_parent = $current_parent_pid; //adminCO is main parent for adco-group users
+            if (!$currentDispObjIsAdminCObject) {
+              $adminCompoundObject = $current_parent_pid; //current object in main display area is not adminCO, thus show its link
+            }
+          } 
+        } 
+        else
+        {
+          if ($currentParentIsContentCObject) {
+            $main_parent = $current_parent_pid; //contentCO is main parent for non-adco-group users
+          }
+        }
+        if (!$currentDispObjIsContentCObject and $currentParentIsContentCObject) {
+          $contentCompoundObject = $current_parent_pid; //current object in main display area is not contentCO, thus show its link
+        }
+      } 
+    } //foreach part_of
+
+    //load parent (for label and manage link)
+    $parent_pid = $main_parent;
+    $parent = islandora_object_load($parent_pid);
+
+    // get and set siblings
+    $siblings = islandora_compound_object_get_parts($parent_pid);
+    $current_key = array_search($object->id, $siblings);
+    $previous_pid = (isset($siblings[$current_key - 1])) ? $siblings[$current_key - 1] : '';
+    $next_pid = (isset($siblings[$current_key + 1])) ? $siblings[$current_key + 1] : '';
+
+    // Check if perms to show link for parent manage.
+    if (islandora_object_manage_access_callback(array(ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
+      $parent_url = 'islandora/object/' . $parent_pid . '/manage';
+      if ($adminCompoundObject) {
+        $adminCompoundObject_url = 'islandora/object/' . $adminCompoundObject;
+      } else {
+        $adminCompoundObject_url = FALSE;
+      }
+    }
+    else {
+      $parent_url = FALSE;
+      $adminCompoundObject_url = FALSE;
+    }
+
+    //set CO-url
+    if ($contentCompoundObject) {
+      $contentCompoundObject_url = 'islandora/object/' . $contentCompoundObject;
+    } else {
+      $contentCompoundObject_url = FALSE;
+    } 
+
+    $info = array(
+      'parent_label' => $parent->label,
+      'parent_pid' => $parent_pid,
+      'parent_url' => $parent_url,
+      'previous_pid' => $previous_pid,
+      'next_pid' => $next_pid,
+      'child_count' => count($siblings),
+      'siblings' => $siblings,
+      'pid' => $object->id,
+      'label' => $object->label,
+      'sequence' => $current_key + 1,
+      'admin_access_object' => $adminCompoundObject_url,
+      'content_access_object' => $contentCompoundObject_url,
+    );
+  } //if !empty part_of
   return $info;
 }
 

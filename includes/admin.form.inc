@@ -65,6 +65,16 @@ function islandora_compound_object_admin_form($form, &$form_state) {
     '#required' => TRUE,
   );
 
+
+  $form['islandora_object_collection_relationship'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Object to collection predicate'),
+    '#description' => t('Changing this after objects have been created will break functionality. Should be part of info:fedora/fedora-system:def/relations-external#'),
+    '#default_value' => variable_get('islandora_object_collection_relationship', 'isMemberOfCollection'),
+    '#required' => TRUE,
+  );
+
+
   $form['islandora_compound_object_use_jail_view'] = array(
     '#type' => 'checkbox',
     '#title' => t('Use alternative, autoloading display for compounds?'),

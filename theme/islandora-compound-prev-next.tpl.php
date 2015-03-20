@@ -22,13 +22,29 @@
  
 ?>
  <div class="islandora-compound-prev-next">
- <span class="islandora-compound-title"><?php 
-  print t('Part of: @parent (@count objects)', array('@parent' => $parent_label, '@count' => $child_count)); ?>
+ <span class="islandora-compound-title">
+
+ <?php print t('@parent (@count objects)', array('@parent' => $parent_label, '@count' => $child_count)); ?>
+ 
  <?php if ($parent_url): ?>
-    <?php print l(t('manage parent'), $parent_url); ?>
+   <br/>
+   <?php print l(t('manage main parent'), $parent_url); ?>
  <?php endif; ?>
  </span><br/>
-
+ 
+ <?php if ($admin_access_object or $content_access_object): ?>
+   <span class="islandora-compound-subtitle">
+   <?php if ($admin_access_object): ?>
+     <?php print l(t('Go to Admin Access Object'), $admin_access_object); ?>
+     <br/>
+   <?php endif; ?>
+   <?php if ($content_access_object): ?>
+     <?php print l(t('Go to Content Access Object'), $content_access_object); ?>
+     <br/>
+   <?php endif; ?>
+   </span><br/>
+ <?php endif; ?>
+ 
  <?php if (!empty($previous_pid)): ?>
    <?php print l(t('Previous'), 'islandora/object/' . $previous_pid); ?>
  <?php endif; ?>
@@ -48,7 +64,7 @@
        theme_image(
          array(
            'path' => $sibling['TN'],
-           'attributes' => array('class' => $sibling['class']),
+           'attributes' => array('class' => $sibling['class']), 
          )
        ),
        'islandora/object/' . $sibling['pid'],
