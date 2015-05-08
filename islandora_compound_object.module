@@ -630,7 +630,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
   $part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $child_rels_predicate);
 
   //get user role
-  $isAdcoUser = in_array('aaco', $user->roles);
+  $isAacoUser = in_array('aaco', $user->roles);
 
   //load current displayed object and check type
   $currentDispObjIsAdminCObject = FALSE;
@@ -675,7 +675,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
         }
 
         // set main_parent (for manage object link and label);  check for and eventually set links for admin/content c-objects  
-        if ($isAdcoUser) {
+        if ($isAacoUser) {
           if ($currentParentIsAdminCObject) {
             $main_parent = $current_parent_pid; //adminCO is main parent for aaco-group users
             if (!$currentDispObjIsAdminCObject) {
@@ -705,7 +705,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
     $previous_pid = (isset($siblings[$current_key - 1])) ? $siblings[$current_key - 1] : '';
     $next_pid = (isset($siblings[$current_key + 1])) ? $siblings[$current_key + 1] : '';
 
-    // Check if perms to show link for parent manage.
+    // Check if perms allow to show link for parent manage.
     if (islandora_object_manage_access_callback(array(ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
       $parent_url = 'islandora/object/' . $parent_pid . '/manage';
       if ($adminCompoundObject) {
@@ -719,7 +719,7 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
       $adminCompoundObject_url = FALSE;
     }
 
-    //set CO-url
+    //set contentCO-url
     if ($contentCompoundObject) {
       $contentCompoundObject_url = 'islandora/object/' . $contentCompoundObject;
     } else {
