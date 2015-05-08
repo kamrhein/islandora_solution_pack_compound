@@ -1,8 +1,12 @@
-# Compound Object Solution Pack [![Build Status](https://travis-ci.org/Islandora/islandora_solution_pack_compound.png?branch=7.x)](https://travis-ci.org/Islandora/islandora_solution_pack_compound)
+# Compound Object Solution Pack 
 
 ## Introduction
 
 The Islandora Compound Object Solution Pack enables generic parent-child relationships between objects. The object view of a compound object is replaced by the view of its first child object. The included "Islandora Compound Object Navigation" block provides a thumbnail navigation of an object's siblings. A "Compound" management tab allows for the addition and removal of parent and child objects for each object.
+
+This fork enables between switching of two parent objects. Using the JAIL Block is not tested for this functionality.
+It is also modified to display one of the parents first and not the first child.
+
 
 ## Installation
 
@@ -48,6 +52,8 @@ Having problems or solved a problem? Check out the Islandora google groups for a
 Current maintainers:
 
 * [Nick Ruest](https://github.com/ruebot)
+Maintainer of this fork:
+* [Kilian Amrhein](https://github.com/kamrhein)
 
 ## Development
 
