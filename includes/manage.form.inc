@@ -23,7 +23,7 @@ function islandora_compound_object_manage_form($form, &$form_state, $object) {
   $rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
 
   // Add child objects.
-  if (variable_get('islandora_compound_object_compound_children', TRUE) && in_array(ISLANDORA_COMPOUND_OBJECT_CMODEL, $object->models)) {
+  if ((variable_get('islandora_compound_object_compound_children', TRUE) && in_array(ISLANDORA_COMPOUND_OBJECT_CMODEL, $object->models)) || !variable_get('islandora_compound_object_compound_children', TRUE)) {
     $form['add_children'] = array(
       '#type' => 'fieldset',
       '#title' => t('Add Child Objects'),
@@ -64,44 +64,43 @@ function islandora_compound_object_manage_form($form, &$form_state, $object) {
       ) + islandora_compound_object_get_tabledrag_element($object);
     }
 
-  }
-
-  // Add parents.
-  $form['add_to_parent'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Associate with Parent Object'),
-    '#description' => t('Add this object to a parent object'),
-  );
-  $form['add_to_parent']['parent'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Parent Object Pid/Label'),
-    '#autocomplete_path' => 'islandora_compound_object/autocomplete/parent',
-  );
-
-  // Remove parents.
-  $parent_part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
-  if (!empty($parent_part_of)) {
-    $form['parents'] = array(
+    // Add parents.
+    $form['add_to_parent'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Unlink From Parent'),
-      '#description' => t('Remove the relationship between this object and parent objects.'),
+      '#title' => t('Associate with Parent Object'),
+      '#description' => t('Add this object to a parent object'),
+    );
+    $form['add_to_parent']['parent'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Parent Object Pid/Label'),
+      '#autocomplete_path' => 'islandora_compound_object/autocomplete/parent',
     );
 
-    $parents = array();
-    foreach ($parent_part_of as $parent) {
-      // Shouldn't be too much of a hit but would be good to avoid the
-      // islandora_object_loads.
-      $pid = $parent['object']['value'];
-      $parent_object = islandora_object_load($pid);
-      $parents[$pid] = array('title' => $parent_object->label, 'pid' => $pid);
+    // Remove parents.
+    $parent_part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
+    if (!empty($parent_part_of)) {
+      $form['parents'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Unlink From Parent'),
+        '#description' => t('Remove the relationship between this object and parent objects.'),
+      );
+
+      $parents = array();
+      foreach ($parent_part_of as $parent) {
+        // Shouldn't be too much of a hit but would be good to avoid the
+        // islandora_object_loads.
+        $pid = $parent['object']['value'];
+        $parent_object = islandora_object_load($pid);
+        $parents[$pid] = array('title' => $parent_object->label, 'pid' => $pid);
+      }
+
+      $form['parents']['unlink_parents'] = array(
+        '#type' => 'tableselect',
+        '#title' => t('Parents'),
+        '#header' => array('title' => t('Title'), 'pid' => t('Object ID')),
+        '#options' => $parents,
+      );
     }
-
-    $form['parents']['unlink_parents'] = array(
-      '#type' => 'tableselect',
-      '#title' => t('Parents'),
-      '#header' => array('title' => t('Title'), 'pid' => t('Object ID')),
-      '#options' => $parents,
-    );
   }
 
   $form['object'] = array(
@@ -128,14 +127,17 @@ function islandora_compound_object_manage_form_validate($form, &$form_state) {
   // Child.
   if (!empty($form_state['values']['child'])) {
     // Check if valid child pid.
-    $compound = FALSE;
-    foreach ($object->models as $value) {
-      if ($value == "islandora:compoundCModel") {
-        $compound = TRUE;
+    if (variable_get('islandora_compound_object_compound_children', TRUE)) {
+      $compound = FALSE;
+      foreach ($object->models as $value) {
+        if ($value == ISLANDORA_COMPOUND_OBJECT_CMODEL) {
+          $compound = TRUE;
+          break;
+        }
       }
-    }
-    if (!$compound) {
-      form_set_error('child', t('This object is not a compound object'));
+      if (!$compound) {
+        form_set_error('child', t('This object is not a compound object'));
+      }
     }
     if (!islandora_is_valid_pid($form_state['values']['child'])) {
       form_set_error('child', t('Invalid object supplied.'));
@@ -148,7 +150,7 @@ function islandora_compound_object_manage_form_validate($form, &$form_state) {
 
     // Do not allow repeated child.
     $child_object = islandora_object_load($form_state['values']['child']);
-    $child_part_of = $child_object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
+    $child_part_of = $child_object->relationships->get(FEDORA_RELS_EXT_URI, $rels_predicate);
     foreach ($child_part_of as $part) {
       if ($part['object']['value'] == $object->id) {
         form_set_error('child', t('The object is already a parent of the child.'));
@@ -166,8 +168,9 @@ function islandora_compound_object_manage_form_validate($form, &$form_state) {
       $parent = islandora_object_load($form_state['values']['parent']);
       $compound = FALSE;
       foreach ($parent->models as $value) {
-        if ($value == "islandora:compoundCModel") {
+        if ($value == ISLANDORA_COMPOUND_OBJECT_CMODEL) {
           $compound = TRUE;
+          break;
         }
       }
       if (!$compound) {
@@ -180,7 +183,7 @@ function islandora_compound_object_manage_form_validate($form, &$form_state) {
     }
 
     // Do not allow repeated parent.
-    $parent_part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
+    $parent_part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $rels_predicate);
     foreach ($parent_part_of as $part) {
       if ($part['object']['value'] == $form_state['values']['parent']) {
         form_set_error('parent', t('The object is already a child of the parent.'));
@@ -192,7 +195,6 @@ function islandora_compound_object_manage_form_validate($form, &$form_state) {
     form_set_error('child', t('An object may not be the parent and child of the same object.'));
     form_set_error('parent');
   }
-
 }
 
 /**
@@ -393,7 +395,7 @@ function islandora_compound_object_update_sequence($parent_pid, $child_pid, $sta
   $escaped_pid = str_replace(':', '_', $parent_pid);
   $child_object = islandora_object_load($child_pid);
   $child_object->relationships->remove(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid");
-  $child_object->relationships->add(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid", $start_seq, TRUE);
+  $child_object->relationships->add(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid", $start_seq, RELS_TYPE_PLAIN_LITERAL);
   $context['message'] = t('Inserting page "@label" (@pid) at position "@pos"', array(
     '@label' => $child_object->label,
     '@pid' => $child_object->id,
@@ -443,8 +445,11 @@ function islandora_compound_object_add_parent($objects, $parent_pids) {
     foreach ($objects as $object) {
       $children = islandora_compound_object_get_parts($parent_pid, TRUE);
       $insert_seq = islandora_compound_object_get_insert_sequence_number($children);
-      $object->relationships->add('info:fedora/fedora-system:def/relations-external#', $rels_predicate, $parent_pid);
-      $object->relationships->add(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid", $insert_seq, TRUE);
+
+      $object->relationships->autoCommit = FALSE;
+      $object->relationships->add(FEDORA_RELS_EXT_URI, $rels_predicate, $parent_pid);
+      $object->relationships->add(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid", $insert_seq, RELS_TYPE_PLAIN_LITERAL);
+      $object->relationships->commitRelationships();
     }
   }
 
@@ -469,7 +474,7 @@ function islandora_compound_object_remove_parent($objects, $parent_pids) {
     $escaped_pid = str_replace(':', '_', $parent_pid);
 
     foreach ($objects as $object) {
-      $object->relationships->remove('info:fedora/fedora-system:def/relations-external#', $rels_predicate, $parent_pid);
+      $object->relationships->remove(FEDORA_RELS_EXT_URI, $rels_predicate, $parent_pid);
       $object->relationships->remove(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid");
     }
   }

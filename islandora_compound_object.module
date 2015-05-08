@@ -118,11 +118,13 @@ function islandora_compound_object_block_info() {
     'info' => t('Islandora Compound Object Navigation'),
     'visibility' => BLOCK_VISIBILITY_LISTED,
     'pages' => 'islandora/object/*',
+    'cache' => DRUPAL_NO_CACHE,
   );
   $blocks['compound_jail_display'] = array(
     'info' => t('Islandora Compound Object JAIL Display'),
     'visibility' => BLOCK_VISIBILITY_LISTED,
     'pages' => 'islandora/object/*',
+    'cache' => DRUPAL_NO_CACHE,
   );
   return $blocks;
 }
@@ -135,6 +137,7 @@ function islandora_compound_object_block_view($delta = '') {
   switch ($delta) {
     case 'compound_navigation':
       if (!variable_get('islandora_compound_object_use_jail_view', FALSE)) {
+        module_load_include('inc', 'islandora_compound_object', 'includes/blocks');
         $block['subject'] = NULL;
         $block['content'] = islandora_compound_object_navigation_block();
       }
@@ -160,7 +163,7 @@ function islandora_compound_object_islandora_compoundcmodel_islandora_object_pur
   foreach ($parts as $part) {
     $escaped_pid = str_replace(':', '_', $pid);
     $child_object = islandora_object_load($part);
-    $child_object->relationships->remove('info:fedora/fedora-system:def/relations-external#', $rels_predicate, $pid);
+    $child_object->relationships->remove(FEDORA_RELS_EXT_URI, $rels_predicate, $pid);
     $child_object->relationships->remove(ISLANDORA_RELS_EXT_URI, "isSequenceNumberOf$escaped_pid");
   }
 }
@@ -178,7 +181,7 @@ function islandora_compound_object_islandora_required_objects(IslandoraTuque $co
 
   $datastream = $compound_content_model->constructDatastream('DS-COMPOSITE-MODEL', 'X');
   $datastream->label = 'DS-COMPOSITE-MODEL';
-  $datastream->mimetype = 'text/xml';
+  $datastream->mimetype = 'application/xml';
   $datastream->setContentFromFile("$module_path/xml/islandora_compound_ds_composite_model.xml", FALSE);
   $compound_content_model->ingestDatastream($datastream);
 
@@ -190,7 +193,7 @@ function islandora_compound_object_islandora_required_objects(IslandoraTuque $co
 
   $datastream = $compound_collection->constructDatastream('COLLECTION_POLICY', 'X');
   $datastream->label = 'Collection policy';
-  $datastream->mimetype = 'text/xml';
+  $datastream->mimetype = 'application/xml';
   $datastream->setContentFromFile("$module_path/xml/islandora_compound_collection_policy.xml", FALSE);
   $compound_collection->ingestDatastream($datastream);
 
@@ -237,36 +240,6 @@ function islandora_compound_object_islandora_xml_form_builder_form_associations(
       'template' => FALSE,
     ),
   );
-}
-
-/**
- * Render navigation block.
- */
-function islandora_compound_object_navigation_block() {
-  module_load_include('inc', 'islandora', 'includes/utilities');
-  drupal_add_css(drupal_get_path('module', 'islandora_compound_object') . '/css/islandora_compound_object.block.css');
-  if (arg(1) == 'object' && islandora_is_valid_pid(arg(2))) {
-
-    // If only compound cmodel objects can be compound, this isn't necessary.
-    $children = islandora_compound_object_get_parts(arg(2));
-    $pid = (!empty($children)) ? $children[0] : arg(2);
-    $object = islandora_object_load($pid);
-
-    $output = '';
-    if ($object) {
-      $compound_info = islandora_compound_object_retrieve_compound_info($object);
-
-      // This object is part of a compound object.
-      if (!empty($compound_info)) {
-        $prev_next = theme('islandora_compound_prev_next', $compound_info);
-        $output .= $prev_next;
-      }
-
-      if (!empty($output)) {
-        return array('#markup' => $output);
-      }
-    }
-  }
 }
 
 /**
@@ -339,10 +312,11 @@ function islandora_compound_object_autocomplete($string, $parent = FALSE) {
   $compound_enforcement = variable_get('islandora_compound_object_compound_children', TRUE);
 
   if ($compound_enforcement && $parent) {
+    $compound_model = ISLANDORA_COMPOUND_OBJECT_CMODEL;
     $parent_query = <<<EOQ
 SELECT ?pid ?title FROM <#ri>
 WHERE {
-  ?pid <fedora-model:hasModel> <info:fedora/islandora:compoundCModel> ;
+  ?pid <fedora-model:hasModel> <info:fedora/$compound_model> ;
        <fedora-model:label> ?title
 }
 EOQ;
@@ -484,9 +458,9 @@ EOQ;
  */
 function islandora_compound_object_task_access(AbstractObject $object) {
   $rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
-  $part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
+  $part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $rels_predicate);
   if (variable_get('islandora_compound_object_use_jail_view', FALSE) && islandora_object_access(ISLANDORA_VIEW_OBJECTS, $object) &&
-    ((in_array('islandora:compoundCModel', $object->models) && islandora_compound_object_children_exist($object)) || !empty($part_of))) {
+    ((in_array(ISLANDORA_COMPOUND_OBJECT_CMODEL, $object->models) && islandora_compound_object_children_exist($object)) || !empty($part_of))) {
     return TRUE;
   }
   else {
@@ -615,7 +589,7 @@ function islandora_compound_object_menu_local_tasks_alter(&$data, $router_item, 
  */
 function islandora_compound_object_retrieve_compound_info(AbstractObject $object) {
   $rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
-  $part_of = $object->relationships->get('info:fedora/fedora-system:def/relations-external#', $rels_predicate);
+  $part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $rels_predicate);
   $info = array();
   // This object is part of a compound object.
   if (!empty($part_of)) {
@@ -623,32 +597,33 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
     foreach ($part_of as $part) {
       $parent_pid = $part['object']['value'];
       $parent = islandora_object_load($parent_pid);
+      if ($parent) {
+        $siblings = islandora_compound_object_get_parts($parent_pid);
+        $current_key = array_search($object->id, $siblings);
+        $previous_pid = (isset($siblings[$current_key - 1])) ? $siblings[$current_key - 1] : '';
+        $next_pid = (isset($siblings[$current_key + 1])) ? $siblings[$current_key + 1] : '';
 
-      $siblings = islandora_compound_object_get_parts($parent_pid);
-      $current_key = array_search($object->id, $siblings);
-      $previous_pid = (isset($siblings[$current_key - 1])) ? $siblings[$current_key - 1] : '';
-      $next_pid = (isset($siblings[$current_key + 1])) ? $siblings[$current_key + 1] : '';
-
-      // Check if perms to show link for parent manage.
-      if (islandora_object_manage_access_callback(array(
-        ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
-        $parent_url = 'islandora/object/' . $parent_pid . '/manage';
+        // Check if perms to show link for parent manage.
+        if (islandora_object_manage_access_callback(array(
+          ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
+          $parent_url = 'islandora/object/' . $parent_pid . '/manage';
+        }
+        else {
+          $parent_url = FALSE;
+        }
+        $info = array(
+          'parent_label' => $parent->label,
+          'parent_pid' => $parent_pid,
+          'parent_url' => $parent_url,
+          'previous_pid' => $previous_pid,
+          'next_pid' => $next_pid,
+          'child_count' => count($siblings),
+          'siblings' => $siblings,
+          'pid' => $object->id,
+          'label' => $object->label,
+          'sequence' => $current_key + 1,
+        );
       }
-      else {
-        $parent_url = FALSE;
-      }
-      $info = array(
-        'parent_label' => $parent->label,
-        'parent_pid' => $parent_pid,
-        'parent_url' => $parent_url,
-        'previous_pid' => $previous_pid,
-        'next_pid' => $next_pid,
-        'child_count' => count($siblings),
-        'siblings' => $siblings,
-        'pid' => $object->id,
-        'label' => $object->label,
-        'sequence' => $current_key + 1,
-      );
     }
   }
   return $info;
