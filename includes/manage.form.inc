@@ -62,7 +62,21 @@ function islandora_compound_object_manage_form($form, &$form_state, $object) {
       $form['reorder_fieldset']['table'] = array(
         '#theme' => 'islandora_compound_object_draggable_table',
       ) + islandora_compound_object_get_tabledrag_element($object);
+
+
+      $form['delete'] = array(
+        '#type' => 'submit',
+        '#access' => islandora_object_access(ISLANDORA_PURGE, $object),
+        '#value' => t("Permanently remove '@label' and all associated parts of its IP from repository", array(
+          '@label' => truncate_utf8($object->label, 32, TRUE, TRUE))
+        ),
+        '#submit' => array('islandora_compound_object_complete_delete'),
+        '#limit_validation_errors' => array(array('pid')),
+      );
+
     }
+
+
 
   }
 
@@ -362,7 +376,7 @@ function islandora_compound_object_build_sequence_operations($parent_pid, $compo
   $operations = array();
   $start_seq = 1;
   foreach ($compounds as $child_pid => $weight) {
-    $operations[] = array(
+	  $operations[] = array(
       'islandora_compound_object_update_sequence', array(
         $parent_pid,
         $child_pid,
@@ -479,3 +493,144 @@ function islandora_compound_object_remove_parent($objects, $parent_pids) {
 
   module_invoke_all('islandora_compound_object_children_removed_from_parent', $objects, $parent_pids);
 }
+
+
+/**
+ * Callback function for object properties admin form delete button.
+ *
+ * @param array $form
+ *   The Drupal form.
+ * @param array $form_state
+ *   The Drupal form state.
+ */
+function islandora_object_properties_form_delete(array $form, array &$form_state) {
+  drupal_goto("islandora/object/{$form_state['values']['pid']}/delete");
+}
+
+
+
+/**
+ * Callback function for compound object properties admin form complete delete button.
+ *
+ * @param array $form
+ *   The Drupal form.
+ * @param array $form_state
+ *   The Drupal form state.
+ */
+function islandora_compound_object_complete_delete(array $form, array &$form_state) {
+  $object = $form_state['object'];
+  $children = islandora_compound_object_get_parts($object->id, TRUE);
+
+  # collect children
+  $rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
+  $parent_part_of = array();
+  $to_delete = array();
+  foreach ($children as $child) {
+      $child_object = islandora_object_load($child['pid']);
+      $parent_part_of = $parent_part_of + $child_object->relationships->get(FEDORA_RELS_EXT_URI, $rels_predicate);
+      $to_delete = array_merge ($to_delete, array($child['pid']));
+  }
+    
+  #collect parents
+  foreach ($parent_part_of as $parent) {
+      $to_delete = array_merge($to_delete, array($parent['object']['value']));
+    }
+
+  #print_r($to_delete);
+
+  $context['results'] = array(
+    'success' => array(),
+    'failure' => array(),
+  );
+  $operations[] = array(
+    'islandora_compound_object_delete_objects', array($to_delete), 
+  );
+
+  $batch = array(
+    'operations' => $operations,
+    'title' => t("Deleting all of @label's directly related compound objects and children ...", array('@label' => $object->label)),
+    'init_message' => t("Preparing to delete all of @label's directly related objects ...", array('@label' => $object->label)),
+    'progress_message' => t('Time elapsed: @elapsed <br/>Estimated time remaining @estimate.'),
+    'error_message' => t('An error has occurred.'),
+    'file' => drupal_get_path('module', 'islandora_compound_object') . '/includes/manage.form.inc',
+  );
+
+  # redirect after purging
+  $parnts = islandora_get_parents_from_rels_ext($object);
+  $parnt = array_pop($parnts);
+  $form_state['redirect'] = isset($parnt) ? "islandora/object/{$parnt->id}" : 'islandora';
+
+  # start batch
+  batch_set($batch);
+}
+
+
+/**
+ * Batch function controlling the object deletion process
+ *
+ * @param array $objects
+ *   All the objects to operate on.
+ * @param array $context
+ *   The context of this batch operation.
+ */
+function islandora_compound_object_delete_objects(array $objects, array &$context) {
+  $object = islandora_compound_object_start_operation($objects, $context);
+  if ($object && $object = islandora_object_load($object)) {
+    islandora_delete_object($object);
+  }
+  if (islandora_compound_object_end_operation($context)) {
+    drupal_set_message('Deleted compound object');
+  }
+}
+
+
+
+
+/**
+ * Starts the batch operation.
+ *
+ * @param array $operands
+ *   All the objects to operate on.
+ * @param array $context
+ *   The context of this batch operation.
+ */
+function islandora_compound_object_start_operation(array $operands, array &$context) {
+  if (!isset($context['sandbox']['progress'])) {
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['total'] = count($operands);
+  }
+  return @$operands[$context['sandbox']['progress']];
+}
+
+/**
+ * Ends the batch operation.
+ *
+ * @param array $context
+ *   The context of this batch operation.
+ *
+ * @return bool
+ *   TRUE or FALSE depending on the context of the batch.
+ */
+function islandora_compound_object_end_operation(array &$context) {
+  $context['sandbox']['progress']++;
+  if ($context['sandbox']['progress'] < $context['sandbox']['total']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['total'];
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * The batch 'finished' callback.
+ */
+function islandora_compound_object_batch_finished($success, $results, $operations) {
+  if (!$success) {
+    // Generic Error Message.
+    $error_operation = reset($operations);
+    $message = t('An error occurred while processing %error_operation with arguments: @arguments', array(
+                 '%error_operation' => $error_operation[0],
+                 '@arguments' => print_r($error_operation[1], TRUE)));
+    drupal_set_message($message, 'error');
+  }
+}
+
