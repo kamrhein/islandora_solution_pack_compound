@@ -708,17 +708,16 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
     // Check if perms allow to show link for parent manage.
     if (islandora_object_manage_access_callback(array(ISLANDORA_METADATA_EDIT, ISLANDORA_MANAGE_PROPERTIES, ISLANDORA_ADD_DS), $parent)) {
       $parent_url = 'islandora/object/' . $parent_pid . '/manage';
-      if ($adminCompoundObject) {
-        $adminCompoundObject_url = 'islandora/object/' . $adminCompoundObject;
-      } else {
-        $adminCompoundObject_url = FALSE;
-      }
-    }
-    else {
+    } else {
       $parent_url = FALSE;
-      $adminCompoundObject_url = FALSE;
     }
 
+    //set adminCO-url
+    if ($adminCompoundObject) {
+      $adminCompoundObject_url = 'islandora/object/' . $adminCompoundObject;
+    } else {
+      $adminCompoundObject_url = FALSE;
+    }
     //set contentCO-url
     if ($contentCompoundObject) {
       $contentCompoundObject_url = 'islandora/object/' . $contentCompoundObject;
