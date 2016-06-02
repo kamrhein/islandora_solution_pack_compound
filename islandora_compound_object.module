@@ -629,8 +629,6 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
   $child_rels_predicate = variable_get('islandora_compound_object_relationship', 'isConstituentOf');
   $part_of = $object->relationships->get(FEDORA_RELS_EXT_URI, $child_rels_predicate);
 
-  //get user role
-  $isAacoUser = in_array('aaco', $user->roles) | in_array('administrator', $user->roles) | in_array('datacurator', $user->roles);
 
   //load current displayed object and check type
   $currentDispObjIsAdminCObject = FALSE;
@@ -675,13 +673,11 @@ function islandora_compound_object_retrieve_compound_info(AbstractObject $object
         }
 
         // set main_parent (for manage object link and label);  check for and eventually set links for admin/content c-objects  
-        if ($isAacoUser) {
-          if ($currentParentIsAdminCObject) {
-            $main_parent = $current_parent_pid; //adminCO is main parent for aaco-group users
-            if (!$currentDispObjIsAdminCObject) {
-              $adminCompoundObject = $current_parent_pid; //current object in main display area is not adminCO, thus show its link
-            }
-          } 
+        if ($currentParentIsAdminCObject && islandora_object_access(ISLANDORA_VIEW_OBJECTS, $current_parent)) {
+          $main_parent = $current_parent_pid; //adminCO is main parent for aaco-group users
+          if (!$currentDispObjIsAdminCObject /*and islandora_object_access(ISLANDORA_VIEW_OBJECTS, islandora_object_load($current_parent_pid))*/) {
+            $adminCompoundObject = $current_parent_pid; //current object in main display area is not adminCO, thus show its link
+          }
         } 
         else
         {
